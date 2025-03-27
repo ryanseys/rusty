@@ -1,0 +1,66 @@
+{
+    "documentation": {
+        "urls": [
+            {
+                "name": "Clap",
+                "url": "https://docs.rs/clap/latest/clap/",
+                "description": "Command line argument parsing for Rust"
+            },
+            {
+                "name": "Colored",
+                "url": "https://docs.rs/colored/latest/colored/",
+                "description": "Terminal coloring for Rust"
+            },
+            {
+                "name": "Criterion",
+                "url": "https://docs.rs/criterion/latest/criterion/",
+                "description": "Benchmarking framework for Rust"
+            },
+            {
+                "name": "PrettyTable",
+                "url": "https://docs.rs/prettytable-rs/latest/prettytable/",
+                "description": "Table formatting for Rust"
+            },
+            {
+                "name": "Tokio",
+                "url": "https://docs.rs/tokio/latest/tokio/",
+                "description": "Async runtime for Rust"
+            },
+            {
+                "name": "Ollama-rs",
+                "url": "https://github.com/pepperoni21/ollama-rs",
+                "description": "Ollama Rust client"
+            },
+            {
+                "name": "Ruby Process",
+                "url": "https://ruby-doc.org/core/Process.html",
+                "description": "Ruby process management"
+            },
+            {
+                "name": "Ruby Time",
+                "url": "https://ruby-doc.org/core/Time.html",
+                "description": "Ruby time measurements"
+            },
+            {
+                "name": "Mistral Model",
+                "url": "https://ollama.ai/library/mistral",
+                "description": "Mistral LLM documentation"
+            },
+            {
+                "name": "Ollama",
+                "url": "https://github.com/ollama/ollama",
+                "description": "Ollama documentation"
+            },
+            {
+                "name": "Rust API Guidelines",
+                "url": "https://rust-lang.github.io/api-guidelines/",
+                "description": "Official Rust API guidelines"
+            },
+            {
+                "name": "Ruby Style Guide",
+                "url": "https://rubystyle.guide/",
+                "description": "Community Ruby style guide"
+            }
+        ]
+    }
+}

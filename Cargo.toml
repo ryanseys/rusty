@@ -19,3 +19,5 @@ clap = { version = "4.4", features = ["derive"] }
 colored = "2.0"
 criterion = "0.5"
 prettytable-rs = "0.10"
+tokio = { version = "1.36", features = ["rt-multi-thread"] }
+ollama-rs = "0.1.6"

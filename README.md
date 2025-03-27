@@ -1,165 +1,125 @@
 # Rusty
 
-A proof of concept project demonstrating Ruby and Rust integration using FFI (Foreign Function Interface) for calculating Fibonacci numbers.
+A benchmarking project comparing Rust and Ruby implementations of Fibonacci number calculation, with detailed performance metrics and AI-powered analysis.
 
 ## Features
 
-- Calculate Fibonacci numbers using either Rust or Ruby implementations
-- Measure and compare performance between implementations
-- Detailed timing information including:
-  - Rust internal calculation time
-  - Total execution time (including FFI overhead for Rust)
-  - Performance comparison between implementations
-- Support for batch processing to analyze FFI overhead
-- Native Rust command-line interface
+- Calculate Fibonacci numbers using both Rust and Ruby implementations
+- Comprehensive performance benchmarking with 100 iterations per implementation
+- Statistical analysis including mean, median, P95, min, and max timings
+- AI-powered performance comparison using local Ollama instance
+- Beautiful terminal output with tables and colored text
+
+## Prerequisites
+
+1. Rust and Cargo
+2. Ruby
+3. Ollama running locally with the `mistral` model (or modify the code to use a different model)
 
 ## Quick Start
 
-1. Make sure you have Rust and Ruby installed
-2. Clone this repository
-3. Build and run:
-```bash
-# Build the project
-cargo build --release
+1. Clone this repository
+2. Build and run:
 
-# Run the command
-./rusty
+```bash
+cargo run -- -N 40  # Calculate 40th Fibonacci number
 ```
 
 ## Usage
 
-The `rusty` command is a native Rust binary that supports several options:
-
 ```bash
-./rusty [options]
+cargo run -- [OPTIONS]
 
 Options:
-  -n, --name NAME     Set the name for greeting (default: friend)
-  -N, --number N      Set the Fibonacci number to calculate (default: 10)
-  --rust             Use Rust implementation
-  --ruby             Use Ruby implementation
-  --batch            Run in batch mode for performance analysis
-  --batch-size N     Set batch size for testing (default: 10)
-  -h, --help         Show this help message
+  -N, --number <N>    Fibonacci number to calculate (default: 10)
+      --rust         Use only Rust implementation
+      --ruby         Use only Ruby implementation
+  -h, --help         Print help
+  -V, --version      Print version
 ```
 
 ### Example Commands
 
-1. Run both implementations and compare performance:
+1. Run both implementations (default):
+
 ```bash
-./rusty --rust --ruby -N 100
+cargo run -- -N 40
 ```
 
 2. Run just the Rust implementation:
+
 ```bash
-./rusty --rust -N 100
+cargo run -- --rust -N 40
 ```
 
 3. Run just the Ruby implementation:
-```bash
-./rusty --ruby -N 100
-```
 
-4. Run batch mode for performance analysis:
 ```bash
-./rusty --rust --ruby --batch -N 100
-```
-
-5. Customize the greeting:
-```bash
-./rusty --rust --ruby -n "Alice" -N 50
+cargo run -- --ruby -N 40
 ```
 
 ### Output Example
 
-When running both implementations, you'll see output like this:
+The program provides:
 
-```
-Hello friend! The 100th Fibonacci number is: 354224848179261915075
-Rust Internal Time: 0.001234 milliseconds
-Total time (including FFI): 266.639 ms
-
-Hello friend! The 100th Fibonacci number is: 354224848179261915075
-Ruby Total Time: 0.123456 ms
-
-Comparison (Rust internal vs Ruby total):
-Rust internal calculation was 100.047x faster than Ruby
-```
+- Detailed iteration-by-iteration timing for both implementations
+- Statistical analysis in table format
+- Performance comparison with exact speed ratios
+- AI-generated playful comparison of the results
 
 ## Implementation Details
 
-### Command Line Interface
-- Written in Rust using `clap` for argument parsing
-- Manages building and running both implementations
-- Provides colored output and detailed timing information
-- Handles process management and error reporting
-
 ### Rust Implementation
-- Located in `src/lib.rs`
-- Uses `u128` for large Fibonacci numbers
-- Maximum supported Fibonacci number is 184 (largest that fits in u128)
-- Includes internal timing measurements
-- Compiled as a dynamic library for Ruby FFI
+
+- Direct implementation in Rust
+- Uses u64 for Fibonacci numbers
+- Includes black_box to prevent compiler optimizations
+- 100 iterations for accurate timing statistics
 
 ### Ruby Implementation
-- Located in `main.rb`
-- Pure Ruby implementation for comparison
-- Uses FFI gem to interface with Rust
-- Includes timing measurements
-- Supports both single and batch calculations
 
-### Performance Considerations
-- Rust internal calculation is typically faster
-- FFI overhead can be significant for single calculations
-- Batch mode available to analyze FFI overhead
-- Performance comparison shows actual calculation speed difference
+- Pure Ruby implementation
+- Runs via subprocess for clean separation
+- 100 iterations matching Rust implementation
+- Separate process ensures fair comparison
+
+### Performance Analysis
+
+- Comprehensive statistics (mean, median, P95, min, max)
+- Pretty-printed tables for easy reading
+- AI-powered analysis for human-friendly comparison
+- Accurate timing down to microseconds
 
 ## Project Structure
 
 ```
 .
-├── rusty             # Native Rust command-line interface
 ├── src/
-│   ├── lib.rs       # Rust Fibonacci implementation
-│   └── main.rs      # Rust CLI implementation
-├── main.rb          # Ruby implementation
-├── Cargo.toml       # Rust dependencies and build configuration
-├── Gemfile         # Ruby dependencies
+│   └── main.rs      # Main Rust implementation and benchmarking
+├── fibonacci.rb     # Ruby implementation
+├── Cargo.toml       # Rust dependencies
 └── README.md       # This file
 ```
 
 ## Dependencies
 
 ### Rust
-- `libc` for FFI compatibility
-- `clap` for command-line argument parsing
-- `colored` for terminal output formatting
-- `serde_json` for JSON handling
 
-### Ruby
-- `ffi` gem for Rust integration
-- `bundler` for dependency management
+- `clap` - Command-line argument parsing
+- `colored` - Terminal output formatting
+- `criterion` - Performance benchmarking
+- `prettytable-rs` - Table formatting
+- `tokio` - Async runtime for Ollama
+- `ollama-rs` - Ollama AI integration
 
-## Development
+### External
 
-To modify the project:
-
-1. Command-line interface changes:
-   - Edit `src/main.rs`
-   - Run `cargo build --release` to rebuild
-
-2. Rust implementation changes:
-   - Edit `src/lib.rs`
-   - Project will automatically rebuild when running `./rusty`
-
-3. Ruby implementation changes:
-   - Edit `main.rb`
-   - No build step needed
+- Ruby (any recent version)
+- Ollama running locally with mistral model
 
 ## Notes
 
-- The Rust implementation is limited to the 184th Fibonacci number due to u128 constraints
-- FFI overhead is more noticeable for small numbers
-- Batch mode is useful for performance analysis
-- Internal timing measurements help distinguish between calculation time and FFI overhead
-- The command-line interface is now a native Rust binary for better performance and error handling
+- The program runs each implementation 100 times for statistical significance
+- Timing includes process startup time for Ruby
+- AI comparison requires a running Ollama instance
+- Falls back to simple comparison if Ollama is unavailable

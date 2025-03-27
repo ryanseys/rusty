@@ -1,6 +1,7 @@
 use clap::Parser;
 use colored::*;
 use criterion::black_box;
+use ollama_rs::{generation::completion::request::GenerationRequest, Ollama};
 use prettytable::{row, Table};
 use std::process::Command;
 use std::time::Instant;
@@ -9,7 +10,7 @@ use std::time::Instant;
 #[command(author, version, about, long_about = None)]
 struct Args {
     /// Fibonacci number to calculate
-    #[arg(short = 'N', long, default_value_t = 10)]
+    #[arg(short = 'N', long, default_value_t = 88)]
     number: u32,
 
     /// Use only Rust implementation
@@ -59,9 +60,9 @@ fn benchmark_rust(n: u32) -> (u64, Vec<f64>) {
     (fibonacci(n), times)
 }
 
-fn run_ruby_command(n: u32) -> Result<(String, Vec<f64>), String> {
+fn run_ruby_command(n: u32) -> Result<(u64, Vec<f64>), String> {
     let mut times = Vec::new();
-    let mut result = String::new();
+    let mut result = None;
 
     // Run multiple iterations for more accurate timing
     for i in 0..100 {
@@ -77,19 +78,29 @@ fn run_ruby_command(n: u32) -> Result<(String, Vec<f64>), String> {
             return Err(String::from_utf8_lossy(&output.stderr).to_string());
         }
 
-        // Store the result from the first run only
+        let current_result = String::from_utf8_lossy(&output.stdout)
+            .trim()
+            .parse::<u64>()
+            .map_err(|e| format!("Failed to parse Ruby output: {}", e))?;
+
+        // Store the result from the first run
         if i == 0 {
-            result = String::from_utf8_lossy(&output.stdout).to_string();
+            result = Some(current_result);
         }
 
         times.push(duration);
-        println!("Ruby Iteration {}: Time = {:.6}ms", i + 1, duration);
+        println!(
+            "Ruby Iteration {}: Result = {}, Time = {:.6}ms",
+            i + 1,
+            current_result,
+            duration
+        );
     }
 
     // Sort times for percentile calculations
     times.sort_by(|a, b| a.partial_cmp(b).unwrap());
 
-    Ok((result, times))
+    Ok((result.unwrap(), times))
 }
 
 fn print_statistics(times: &[f64], implementation: &str) {
@@ -126,6 +137,28 @@ fn print_statistics(times: &[f64], implementation: &str) {
     table.printstd();
 }
 
+async fn generate_comparison_text(rust_time: f64, ruby_time: f64) -> String {
+    let ollama = Ollama::default();
+    let prompt = format!(
+        "Write a fun, playful, one-paragraph comparison of these benchmark results: Rust took {:.6}ms and Ruby took {:.6}ms. Be creative and entertaining!",
+        rust_time,
+        ruby_time
+    );
+
+    let request = GenerationRequest::new(
+        "mistral".to_string(), // or whichever model you have locally
+        prompt,
+    );
+
+    match ollama.generate(request).await {
+        Ok(response) => response.response,
+        Err(_) => format!(
+            "Rust was {:.2}x faster than Ruby! 🚀",
+            ruby_time / rust_time
+        ),
+    }
+}
+
 fn main() {
     let args = Args::parse();
 
@@ -144,24 +177,25 @@ fn main() {
     println!("================================");
 
     let mut rust_result = None;
+    let mut ruby_result = None;
     let mut ruby_time = None;
 
     // Run Rust implementation
     if run_rust {
-        println!("\n{}", "Rust Implementation:".cyan().bold());
+        println!("\n{}", "🦀 Rust Implementation:".cyan().bold());
         let (result, times) = benchmark_rust(args.number);
         println!("The {}th Fibonacci number is: {}", args.number, result);
-        print_statistics(&times, "Rust");
+        print_statistics(&times, "🦀 Rust");
         rust_result = Some((result, times[times.len() / 2])); // Store median time
     }
 
     // Run Ruby implementation
     if run_ruby {
-        println!("\n{}", "Ruby Implementation:".cyan().bold());
+        println!("\n{}", "💎 Ruby Implementation:".cyan().bold());
         match run_ruby_command(args.number) {
-            Ok((output, times)) => {
-                print!("{}", output);
-                print_statistics(&times, "Ruby");
+            Ok((result, times)) => {
+                print_statistics(&times, "💎 Ruby");
+                ruby_result = Some(result);
                 ruby_time = Some(times[times.len() / 2]); // Use median time
             }
             Err(e) => eprintln!("{}: {}", "Error running Ruby".red().bold(), e),
@@ -170,19 +204,35 @@ fn main() {
 
     // Compare implementations
     if let (Some((rust_result, rust_median)), Some(ruby_time)) = (rust_result, ruby_time) {
-        println!("\n{}", "Performance Comparison:".green().bold());
+        println!("\n{}", "⚡ Performance Comparison:".green().bold());
         println!("--------------------");
 
         let mut table = Table::new();
         table.add_row(row!["Metric", "Value"]);
-        table.add_row(row!["Rust Result", rust_result]);
-        table.add_row(row!["Rust Median Time (ms)", format!("{:.6}", rust_median)]);
-        table.add_row(row!["Ruby Time (ms)", format!("{:.6}", ruby_time)]);
+        table.add_row(row!["🔢 Fibonacci Number (N)", args.number]);
+        table.add_row(row!["🦀 Rust Result", rust_result]);
         table.add_row(row![
-            "Speed Ratio",
+            "💎 Ruby Result",
+            ruby_result.expect("Ruby result should be available")
+        ]);
+        table.add_row(row![
+            "🦀 Rust Median Time (ms)",
+            format!("{:.6}", rust_median)
+        ]);
+        table.add_row(row![
+            "💎 Ruby Median Time (ms)",
+            format!("{:.6}", ruby_time)
+        ]);
+        table.add_row(row![
+            "🚀 Speed Ratio",
             format!("{:.2}x (Rust faster)", ruby_time / rust_median)
         ]);
 
         table.printstd();
+
+        // Add the fun comparison
+        let runtime = tokio::runtime::Runtime::new().unwrap();
+        let comparison = runtime.block_on(generate_comparison_text(rust_median, ruby_time));
+        println!("\n{}", comparison.cyan().italic());
     }
 }
