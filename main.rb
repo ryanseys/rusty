@@ -1,5 +1,6 @@
 require 'ffi'
 require 'rbconfig'
+require 'optparse'
 
 module Rusty
   extend FFI::Library
@@ -50,8 +51,25 @@ module Rusty
   end
 end
 
-# Example usage
-name = "Ryan"
+def get_name_from_stdin
+  print "Enter your name: "
+  STDOUT.flush  # Ensure the prompt is displayed before reading
+  gets.chomp
+end
+
+# Parse command line arguments
+options = {}
+OptionParser.new do |opts|
+  opts.banner = "Usage: #{$0} [options]"
+  opts.on("--name=NAME", "Your name") do |name|
+    options[:name] = name
+  end
+end.parse!
+
+# Get the name from command line or prompt
+name = options[:name] || get_name_from_stdin
+
+# Example numbers (you could add these as command line arguments too)
 num1 = 5
 num2 = 3
 

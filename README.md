@@ -7,6 +7,7 @@ This is a minimal proof of concept demonstrating how to call Rust code from Ruby
 - Perform calculations in Rust
 - Return strings from Rust to Ruby
 - Handle memory management properly between languages
+- Handle command line arguments and interactive input
 
 ## Prerequisites
 
@@ -70,13 +71,25 @@ This is a minimal proof of concept demonstrating how to call Rust code from Ruby
 
 ## Running the Example
 
-Run the Ruby script using Bundler:
-```bash
-bundle exec ruby main.rb
-```
+You can run the script in two ways:
+
+1. With a command line argument:
+   ```bash
+   bundle exec ruby main.rb --name=Ryan
+   ```
+
+2. Interactively (will prompt for name):
+   ```bash
+   bundle exec ruby main.rb
+   ```
 
 You should see output like:
 ```
+# When using --name=Ryan:
+Hello Ryan! The sum is: 8
+
+# When running interactively:
+Enter your name: Ryan
 Hello Ryan! The sum is: 8
 ```
 
@@ -96,6 +109,8 @@ The example demonstrates three key components working together:
    - Handles proper memory management
    - Includes cross-platform library path detection
    - Implements error handling
+   - Processes command line arguments using `optparse`
+   - Falls back to interactive STDIN input if no name is provided
 
 3. **Build Configuration**
    - Cargo.toml: Configures the Rust project to build as a dynamic library
