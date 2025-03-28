@@ -1,4 +1,3 @@
-use actix_web::rt::System;
 use clap::Parser;
 use colored::*;
 use ollama_rs::{generation::completion::request::GenerationRequest, Ollama};
@@ -472,7 +471,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         // Report metrics to MCP server if enabled
         if args.metrics {
-            if let Ok(mut server) = mcp_server::start_metrics_server() {
+            if let Ok(server) = mcp_server::start_metrics_server() {
                 if let Err(e) = server.report_comparison(&comparison) {
                     eprintln!("Failed to report comparison metrics: {}", e);
                 }

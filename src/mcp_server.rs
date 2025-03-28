@@ -4,12 +4,10 @@ use actix_web::{get, post, web, App, HttpResponse, HttpServer, Responder};
 use futures::stream::{self, Stream};
 use futures::StreamExt;
 use serde::{Deserialize, Serialize};
-use serde_json::json;
 use std::convert::Infallible;
 use std::pin::Pin;
 use std::{
     error::Error,
-    io::{self, BufRead, BufReader, Write},
     process::Command,
     sync::atomic::{AtomicBool, Ordering},
     sync::Arc,
