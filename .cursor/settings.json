@@ -12,6 +12,11 @@
                 "description": "Terminal coloring for Rust"
             },
             {
+                "name": "Actix Web",
+                "url": "https://actix.rs/docs",
+                "description": "Web framework for Rust"
+            },
+            {
                 "name": "Criterion",
                 "url": "https://docs.rs/criterion/latest/criterion/",
                 "description": "Benchmarking framework for Rust"

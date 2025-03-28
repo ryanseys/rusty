@@ -1,0 +1,18 @@
+{
+    "mcpServers": {
+        "fibonacci-sse2": {
+            "type": "sse",
+            "url": "http://localhost:8080/fibonacci/mcp/sse"
+        },
+        "fibonacci-stdio": {
+            "type": "stdio",
+            "command": "cargo",
+            "args": [
+                "run",
+                "--",
+                "--metrics"
+            ],
+            "env": {}
+        }
+    }
+}

@@ -9,6 +9,9 @@
 - Added AI-powered performance comparison using local Ollama instance
 - Added colorful terminal output with tables and emojis
 - Added default Fibonacci number calculation of N=88
+- Implemented bi-directional FFI between Rust and Ruby
+- Added Rust→Ruby FFI benchmarking
+- Extended comparison table to show both FFI directions
 
 ### Changed
 

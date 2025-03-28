@@ -9,6 +9,7 @@ A benchmarking project comparing Rust and Ruby implementations of Fibonacci numb
 - Statistical analysis including mean, median, P95, min, and max timings
 - AI-powered performance comparison using local Ollama instance
 - Beautiful terminal output with tables and colored text
+- MCP server mode for metrics collection and reporting
 
 ## Prerequisites
 
@@ -34,6 +35,7 @@ Options:
   -N, --number <N>    Fibonacci number to calculate (default: 10)
       --rust         Use only Rust implementation
       --ruby         Use only Ruby implementation
+      --metrics     Enable MCP server mode
   -h, --help         Print help
   -V, --version      Print version
 ```
@@ -58,6 +60,12 @@ cargo run -- --rust -N 40
 cargo run -- --ruby -N 40
 ```
 
+4. Run with MCP server enabled:
+
+```bash
+cargo run -- -N 40 --metrics
+```
+
 ### Output Example
 
 The program provides:
@@ -66,6 +74,117 @@ The program provides:
 - Statistical analysis in table format
 - Performance comparison with exact speed ratios
 - AI-generated playful comparison of the results
+- JSON metrics output when running in MCP server mode
+
+## MCP Server Mode
+
+The project includes a Model Context Protocol (MCP) server that can be used to collect and report metrics about the Fibonacci calculations. This is particularly useful for integrating with other tools or collecting performance data over time.
+
+### Running in MCP Server Mode
+
+To start the MCP server, use the `--metrics` flag:
+
+```bash
+cargo run -- --metrics
+```
+
+The server will start and wait for input on stdin. You can then send requests in JSON format:
+
+```bash
+# Example: Calculate request
+echo '{"type":"Calculate","data":{"number":40,"implementation":"rust"}}' | cargo run -- --metrics
+
+# Example: Benchmark request
+echo '{"type":"Benchmark","data":{"number":40,"implementation":"rust"}}' | cargo run -- --metrics
+```
+
+### Server Protocol
+
+The server accepts two types of requests:
+
+1. Calculate Request (single calculation):
+
+```json
+{
+  "type": "Calculate",
+  "data": {
+    "number": 40,
+    "implementation": "rust"  // Can be: "rust", "ruby", "rust_ruby_ffi", or "ruby_rust_ffi"
+  }
+}
+```
+
+2. Benchmark Request (runs 100 iterations):
+
+```json
+{
+  "type": "Benchmark",
+  "data": {
+    "number": 40,
+    "implementation": "rust"
+  }
+}
+```
+
+### Server Responses
+
+The server responds with JSON in one of two formats:
+
+1. Successful Result:
+
+```json
+{
+  "type": "Result",
+  "data": {
+    "result": 102334155,
+    "execution_time_ms": 0.123,
+    "implementation": "rust"
+  }
+}
+```
+
+2. Error:
+
+```json
+{
+  "type": "Error",
+  "data": "Invalid implementation specified"
+}
+```
+
+### Comparison Metrics
+
+When running benchmarks, the server also outputs comprehensive comparison metrics:
+
+```json
+{
+  "rust_metrics": {
+    "number": 40,
+    "result": 102334155,
+    "execution_time_ms": 0.123,
+    "implementation": "Pure Rust"
+  },
+  "ruby_metrics": {
+    "number": 40,
+    "result": 102334155,
+    "execution_time_ms": 1.234,
+    "implementation": "Pure Ruby"
+  },
+  "rust_ruby_ffi_metrics": {
+    "number": 40,
+    "result": 102334155,
+    "execution_time_ms": 0.456,
+    "implementation": "Ruby->Rust FFI"
+  },
+  "ruby_rust_ffi_metrics": {
+    "number": 40,
+    "result": 102334155,
+    "execution_time_ms": 0.789,
+    "implementation": "Rust->Ruby FFI"
+  },
+  "speedup_vs_rust": 10.032
+}
+```
 
 ## Implementation Details
 
@@ -95,10 +214,12 @@ The program provides:
 ```
 .
 ├── src/
-│   └── main.rs      # Main Rust implementation and benchmarking
-├── fibonacci.rb     # Ruby implementation
-├── Cargo.toml       # Rust dependencies
-└── README.md       # This file
+│   ├── main.rs         # Main Rust implementation and benchmarking
+│   └── mcp_server.rs   # MCP server implementation
+├── fibonacci.rb        # Ruby implementation
+├── fibonacci_ffi.rb    # Ruby FFI implementation
+├── Cargo.toml         # Rust dependencies
+└── README.md         # This file
 ```
 
 ## Dependencies
@@ -111,6 +232,8 @@ The program provides:
 - `prettytable-rs` - Table formatting
 - `tokio` - Async runtime for Ollama
 - `ollama-rs` - Ollama AI integration
+- `serde` - JSON serialization/deserialization
+- `serde_json` - JSON support
 
 ### External
 
@@ -123,3 +246,5 @@ The program provides:
 - Timing includes process startup time for Ruby
 - AI comparison requires a running Ollama instance
 - Falls back to simple comparison if Ollama is unavailable
+- MCP server mode uses JSON for all communication
+- Server responses are line-delimited JSON objects

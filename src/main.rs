@@ -1,10 +1,15 @@
+use actix_web::rt::System;
 use clap::Parser;
 use colored::*;
-use criterion::black_box;
 use ollama_rs::{generation::completion::request::GenerationRequest, Ollama};
 use prettytable::{row, Table};
-use std::process::Command;
-use std::time::Instant;
+use rusty::fibonacci_ffi;
+use std::fs::File;
+use std::io::Write;
+use std::{process::Command, time::Instant};
+
+mod mcp_server;
+use mcp_server::{ComparisonMetrics, FibonacciMetrics};
 
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
@@ -20,21 +25,10 @@ struct Args {
     /// Use only Ruby implementation
     #[arg(long)]
     ruby: bool,
-}
 
-// Direct Rust implementation
-fn fibonacci(n: u32) -> u64 {
-    if n <= 1 {
-        return n as u64;
-    }
-    let mut a = 0u64;
-    let mut b = 1u64;
-    for _ in 1..n {
-        let temp = a + b;
-        a = b;
-        b = temp;
-    }
-    b
+    /// Enable MCP server mode
+    #[arg(long)]
+    metrics: bool,
 }
 
 fn benchmark_rust(n: u32) -> (u64, Vec<f64>) {
@@ -43,21 +37,19 @@ fn benchmark_rust(n: u32) -> (u64, Vec<f64>) {
     // Run multiple iterations for more accurate timing
     for i in 0..100 {
         let start = Instant::now();
-        let result = fibonacci(black_box(n));
+        let result = fibonacci_ffi(n); // FFI function is already marked as safe
         let duration = start.elapsed().as_secs_f64() * 1000.0;
         times.push(duration);
         println!(
-            "Iteration {}: Result = {}, Time = {:.6}ms",
+            "Rust FFI Iteration {}: Result = {}, Time = {:.6}ms",
             i + 1,
             result,
             duration
         );
     }
 
-    // Sort times for percentile calculations
     times.sort_by(|a, b| a.partial_cmp(b).unwrap());
-
-    (fibonacci(n), times)
+    (fibonacci_ffi(n), times) // FFI function is already marked as safe
 }
 
 fn run_ruby_command(n: u32) -> Result<(u64, Vec<f64>), String> {
@@ -68,7 +60,7 @@ fn run_ruby_command(n: u32) -> Result<(u64, Vec<f64>), String> {
     for i in 0..100 {
         let start = Instant::now();
         let output = Command::new("ruby")
-            .args(&["fibonacci.rb", &n.to_string()])
+            .args(["fibonacci.rb", &n.to_string()])
             .output()
             .map_err(|e| format!("Failed to execute Ruby: {}", e))?;
 
@@ -103,38 +95,47 @@ fn run_ruby_command(n: u32) -> Result<(u64, Vec<f64>), String> {
     Ok((result.unwrap(), times))
 }
 
-fn print_statistics(times: &[f64], implementation: &str) {
-    let len = times.len();
-    let mean: f64 = times.iter().sum::<f64>() / len as f64;
-    let median = times[len / 2];
-    let p95 = times[(len as f64 * 0.95) as usize];
-    let min = times[0];
-    let max = times[len - 1];
+fn run_ruby_ffi_command(n: u32) -> Result<(u64, Vec<f64>), String> {
+    let mut times = Vec::new();
+    let mut result = None;
 
-    let mut table = Table::new();
-    table.add_row(row!["Metric", "Time (ms)"]);
-    table.add_row(row![
-        format!("{} Mean", implementation),
-        format!("{:.6}", mean)
-    ]);
-    table.add_row(row![
-        format!("{} Median", implementation),
-        format!("{:.6}", median)
-    ]);
-    table.add_row(row![
-        format!("{} P95", implementation),
-        format!("{:.6}", p95)
-    ]);
-    table.add_row(row![
-        format!("{} Min", implementation),
-        format!("{:.6}", min)
-    ]);
-    table.add_row(row![
-        format!("{} Max", implementation),
-        format!("{:.6}", max)
-    ]);
+    // Run multiple iterations for more accurate timing
+    for i in 0..100 {
+        let start = Instant::now();
+        let output = Command::new("ruby")
+            .args(["fibonacci_ffi.rb", &n.to_string()])
+            .output()
+            .map_err(|e| format!("Failed to execute Ruby FFI: {}", e))?;
 
-    table.printstd();
+        let duration = start.elapsed().as_secs_f64() * 1000.0;
+
+        if !output.status.success() {
+            return Err(String::from_utf8_lossy(&output.stderr).to_string());
+        }
+
+        let current_result = String::from_utf8_lossy(&output.stdout)
+            .trim()
+            .parse::<u64>()
+            .map_err(|e| format!("Failed to parse Ruby FFI output: {}", e))?;
+
+        // Store the result from the first run
+        if i == 0 {
+            result = Some(current_result);
+        }
+
+        times.push(duration);
+        println!(
+            "Ruby FFI Iteration {}: Result = {}, Time = {:.6}ms",
+            i + 1,
+            current_result,
+            duration
+        );
+    }
+
+    // Sort times for percentile calculations
+    times.sort_by(|a, b| a.partial_cmp(b).unwrap());
+
+    Ok((result.unwrap(), times))
 }
 
 async fn generate_comparison_text(rust_time: f64, ruby_time: f64) -> String {
@@ -159,80 +160,344 @@ async fn generate_comparison_text(rust_time: f64, ruby_time: f64) -> String {
     }
 }
 
-fn main() {
+fn print_consolidated_table(
+    _n: u32,
+    rust_result: Option<&(u64, Vec<f64>)>,
+    ruby_result: Option<&(u64, Vec<f64>)>,
+    ruby_to_rust_result: Option<&(u64, Vec<f64>)>,
+    rust_to_ruby_result: Option<&(u64, Vec<f64>)>,
+    file: &mut File,
+) {
+    let header = format!(
+        "\n{}",
+        "🎯 Consolidated Performance Results:".green().bold()
+    );
+    println!("{}", header);
+    writeln!(file, "{}", header).expect("Failed to write to file");
+
+    let separator = "--------------------------------";
+    println!("{}", separator);
+    writeln!(file, "{}", separator).expect("Failed to write to file");
+
+    let mut table = Table::new();
+    table.add_row(row![
+        "Implementation",
+        "Result",
+        "Mean (ms)",
+        "Median (ms)",
+        "P95 (ms)",
+        "Min (ms)",
+        "Max (ms)",
+        "Speedup vs Rust"
+    ]);
+
+    if let (
+        Some((rust_val, rust_times)),
+        Some((ruby_val, ruby_times)),
+        Some((r2r_val, r2r_times)),
+        Some((rtr_val, rtr_times)),
+    ) = (
+        rust_result,
+        ruby_result,
+        ruby_to_rust_result,
+        rust_to_ruby_result,
+    ) {
+        // Calculate statistics for each implementation
+        let rust_stats = calculate_stats(rust_times);
+        let ruby_stats = calculate_stats(ruby_times);
+        let r2r_stats = calculate_stats(r2r_times);
+        let rtr_stats = calculate_stats(rtr_times);
+
+        // Add rows for each implementation
+        table.add_row(row![
+            "🦀 Pure Rust",
+            rust_val,
+            format!("{:.6}", rust_stats.mean),
+            format!("{:.6}", rust_stats.median),
+            format!("{:.6}", rust_stats.p95),
+            format!("{:.6}", rust_stats.min),
+            format!("{:.6}", rust_stats.max),
+            "1.00x (baseline)"
+        ]);
+
+        table.add_row(row![
+            "💎 Pure Ruby",
+            ruby_val,
+            format!("{:.6}", ruby_stats.mean),
+            format!("{:.6}", ruby_stats.median),
+            format!("{:.6}", ruby_stats.p95),
+            format!("{:.6}", ruby_stats.min),
+            format!("{:.6}", ruby_stats.max),
+            format!("{:.2}x slower", ruby_stats.median / rust_stats.median)
+        ]);
+
+        table.add_row(row![
+            "🔄 Ruby->Rust FFI",
+            r2r_val,
+            format!("{:.6}", r2r_stats.mean),
+            format!("{:.6}", r2r_stats.median),
+            format!("{:.6}", r2r_stats.p95),
+            format!("{:.6}", r2r_stats.min),
+            format!("{:.6}", r2r_stats.max),
+            format!("{:.2}x slower", r2r_stats.median / rust_stats.median)
+        ]);
+
+        table.add_row(row![
+            "🔄 Rust->Ruby FFI",
+            rtr_val,
+            format!("{:.6}", rtr_stats.mean),
+            format!("{:.6}", rtr_stats.median),
+            format!("{:.6}", rtr_stats.p95),
+            format!("{:.6}", rtr_stats.min),
+            format!("{:.6}", rtr_stats.max),
+            format!("{:.2}x slower", rtr_stats.median / rust_stats.median)
+        ]);
+    } else {
+        table.add_row(row![
+            "Error",
+            "Could not calculate metrics",
+            "-",
+            "-",
+            "-",
+            "-",
+            "-",
+            "-"
+        ]);
+    }
+
+    // Capture table output as string
+    let mut table_string = Vec::new();
+    table
+        .print(&mut table_string)
+        .expect("Failed to capture table");
+    let table_string = String::from_utf8(table_string).expect("Invalid UTF-8");
+
+    // Print to both console and file
+    print!("{}", table_string);
+    writeln!(
+        file,
+        "{}",
+        String::from_utf8(table_string.into_bytes()).expect("Invalid UTF-8")
+    )
+    .expect("Failed to write to file");
+}
+
+// Helper struct for statistics
+struct Stats {
+    mean: f64,
+    median: f64,
+    p95: f64,
+    min: f64,
+    max: f64,
+}
+
+#[allow(dead_code)]
+fn calculate_stats(times: &[f64]) -> Stats {
+    let len = times.len();
+    Stats {
+        mean: times.iter().sum::<f64>() / len as f64,
+        median: times[len / 2],
+        p95: times[(len as f64 * 0.95) as usize],
+        min: times[0],
+        max: times[len - 1],
+    }
+}
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args = Args::parse();
 
+    // Create output file
+    let mut output_file = std::fs::File::create("output.txt")?;
+
+    // Start metrics server if enabled
+    if args.metrics {
+        println!("Starting metrics server...");
+        if let Ok(server) = mcp_server::start_metrics_server() {
+            println!("Metrics server started successfully.");
+
+            // Run the server and handle its result
+            if let Err(e) = server.run().await {
+                eprintln!("Server error: {}", e);
+            }
+            return Ok(());
+        } else {
+            eprintln!("Failed to start metrics server");
+        }
+    }
+
+    // Write UTF-8 BOM at the start if the file is empty
+    let metadata = output_file.metadata().expect("Failed to get file metadata");
+    if metadata.len() == 0 {
+        output_file
+            .write_all(&[0xEF, 0xBB, 0xBF])
+            .expect("Failed to write BOM");
+    }
+
+    // Write timestamp to the file
+    writeln!(output_file, "\n=== Run at {} ===", chrono::Local::now())
+        .expect("Failed to write timestamp");
+
+    // Helper macro to write to both console and file
+    macro_rules! output {
+        ($($arg:tt)*) => {{
+            let output = format!($($arg)*);
+            println!("{}", output);
+            writeln!(output_file, "{}", output).expect("Failed to write to file");
+        }};
+    }
+
     // If neither implementation is specified, run both
-    let run_rust = args.rust || (!args.rust && !args.ruby);
-    let run_ruby = args.ruby || (!args.rust && !args.ruby);
+    let run_rust = args.rust || !args.ruby;
+    let run_ruby = args.ruby || !args.rust;
 
     if !args.rust && !args.ruby {
-        println!(
-            "{}",
-            "No implementation specified, running both for comparison.".yellow()
+        output!(
+            "Running both Rust and Ruby implementations for N = {}\n",
+            args.number
+        );
+    } else {
+        output!(
+            "Running {} implementation{} for N = {}\n",
+            match (args.rust, args.ruby) {
+                (true, false) => "Rust",
+                (false, true) => "Ruby",
+                _ => unreachable!(),
+            },
+            if args.rust && args.ruby { "s" } else { "" },
+            args.number
         );
     }
 
-    println!("{}", "\nBenchmarking Implementations:".bold());
-    println!("================================");
-
     let mut rust_result = None;
     let mut ruby_result = None;
-    let mut ruby_time = None;
+    let mut ruby_to_rust_result = None;
+    let mut rust_to_ruby_result = None;
 
     // Run Rust implementation
     if run_rust {
-        println!("\n{}", "🦀 Rust Implementation:".cyan().bold());
+        output!("\n{}", "🦀 Rust Implementation:".cyan().bold());
         let (result, times) = benchmark_rust(args.number);
-        println!("The {}th Fibonacci number is: {}", args.number, result);
-        print_statistics(&times, "🦀 Rust");
-        rust_result = Some((result, times[times.len() / 2])); // Store median time
+        output!("The {}th Fibonacci number is: {}", args.number, result);
+        rust_result = Some((result, times));
     }
 
     // Run Ruby implementation
     if run_ruby {
-        println!("\n{}", "💎 Ruby Implementation:".cyan().bold());
+        output!("\n{}", "💎 Ruby Implementation:".cyan().bold());
         match run_ruby_command(args.number) {
             Ok((result, times)) => {
-                print_statistics(&times, "💎 Ruby");
-                ruby_result = Some(result);
-                ruby_time = Some(times[times.len() / 2]); // Use median time
+                ruby_result = Some((result, times));
             }
-            Err(e) => eprintln!("{}: {}", "Error running Ruby".red().bold(), e),
+            Err(e) => output!("{}: {}", "Error running Ruby".red().bold(), e),
         }
     }
 
-    // Compare implementations
-    if let (Some((rust_result, rust_median)), Some(ruby_time)) = (rust_result, ruby_time) {
-        println!("\n{}", "⚡ Performance Comparison:".green().bold());
-        println!("--------------------");
-
-        let mut table = Table::new();
-        table.add_row(row!["Metric", "Value"]);
-        table.add_row(row!["🔢 Fibonacci Number (N)", args.number]);
-        table.add_row(row!["🦀 Rust Result", rust_result]);
-        table.add_row(row![
-            "💎 Ruby Result",
-            ruby_result.expect("Ruby result should be available")
-        ]);
-        table.add_row(row![
-            "🦀 Rust Median Time (ms)",
-            format!("{:.6}", rust_median)
-        ]);
-        table.add_row(row![
-            "💎 Ruby Median Time (ms)",
-            format!("{:.6}", ruby_time)
-        ]);
-        table.add_row(row![
-            "🚀 Speed Ratio",
-            format!("{:.2}x (Rust faster)", ruby_time / rust_median)
-        ]);
-
-        table.printstd();
-
-        // Add the fun comparison
-        let runtime = tokio::runtime::Runtime::new().unwrap();
-        let comparison = runtime.block_on(generate_comparison_text(rust_median, ruby_time));
-        println!("\n{}", comparison.cyan().italic());
+    // Run Ruby→Rust FFI implementation
+    if run_ruby {
+        output!("\n{}", "🔗 Ruby→Rust FFI Implementation:".cyan().bold());
+        match run_ruby_ffi_command(args.number) {
+            Ok((result, times)) => {
+                ruby_to_rust_result = Some((result, times));
+            }
+            Err(e) => output!("{}: {}", "Error running Ruby FFI".red().bold(), e),
+        }
     }
+
+    // Run Rust→Ruby FFI implementation
+    if run_rust {
+        output!("\n{}", "🔗 Rust→Ruby FFI Implementation:".cyan().bold());
+        match run_ruby_command(args.number) {
+            Ok((result, times)) => {
+                rust_to_ruby_result = Some((result, times));
+            }
+            Err(e) => output!("{}: {}", "Error running Rust→Ruby FFI".red().bold(), e),
+        }
+    }
+
+    // After benchmarks, send metrics to MCP server if enabled
+    if let (
+        Some((rust_val, rust_times)),
+        Some((ruby_val, ruby_times)),
+        Some((r2r_val, r2r_times)),
+        Some((rtr_val, rtr_times)),
+    ) = (
+        &rust_result,
+        &ruby_result,
+        &ruby_to_rust_result,
+        &rust_to_ruby_result,
+    ) {
+        let rust_stats = calculate_stats(rust_times);
+        let ruby_stats = calculate_stats(ruby_times);
+        let r2r_stats = calculate_stats(r2r_times);
+        let rtr_stats = calculate_stats(rtr_times);
+
+        let comparison = ComparisonMetrics {
+            rust_metrics: FibonacciMetrics {
+                number: args.number,
+                result: *rust_val,
+                execution_time_ms: rust_stats.mean,
+                implementation: "Pure Rust".to_string(),
+            },
+            ruby_metrics: FibonacciMetrics {
+                number: args.number,
+                result: *ruby_val,
+                execution_time_ms: ruby_stats.mean,
+                implementation: "Pure Ruby".to_string(),
+            },
+            rust_ruby_ffi_metrics: FibonacciMetrics {
+                number: args.number,
+                result: *r2r_val,
+                execution_time_ms: r2r_stats.mean,
+                implementation: "Ruby->Rust FFI".to_string(),
+            },
+            ruby_rust_ffi_metrics: FibonacciMetrics {
+                number: args.number,
+                result: *rtr_val,
+                execution_time_ms: rtr_stats.mean,
+                implementation: "Rust->Ruby FFI".to_string(),
+            },
+            speedup_vs_rust: ruby_stats.mean / rust_stats.mean,
+        };
+
+        // Print consolidated table
+        print_consolidated_table(
+            args.number,
+            Some(&(*rust_val, rust_times.clone())),
+            Some(&(*ruby_val, ruby_times.clone())),
+            Some(&(*r2r_val, r2r_times.clone())),
+            Some(&(*rtr_val, rtr_times.clone())),
+            &mut output_file,
+        );
+
+        // Report metrics to MCP server if enabled
+        if args.metrics {
+            if let Ok(mut server) = mcp_server::start_metrics_server() {
+                if let Err(e) = server.report_comparison(&comparison) {
+                    eprintln!("Failed to report comparison metrics: {}", e);
+                }
+            }
+        }
+    }
+
+    // Get AI comparison if both implementations ran successfully
+    if let (
+        Some((_, rust_times)),
+        Some((_, ruby_times)),
+        Some((_, _r2r_times)),
+        Some((_, _r2r_rev_times)),
+    ) = (
+        &rust_result,
+        &ruby_result,
+        &ruby_to_rust_result,
+        &rust_to_ruby_result,
+    ) {
+        let rust_median = rust_times[rust_times.len() / 2];
+        let ruby_median = ruby_times[ruby_times.len() / 2];
+
+        let comparison = generate_comparison_text(rust_median, ruby_median).await;
+        output!("\n{}", comparison.cyan().italic());
+    }
+
+    Ok(())
 }
