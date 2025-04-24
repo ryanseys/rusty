@@ -1,3 +1,4 @@
+pub mod divide;
 use libc::{c_int, c_longlong, c_uint};
 use std::ffi::{CStr, CString};
 use std::mem;

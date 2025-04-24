@@ -7,9 +7,6 @@ use std::fs::File;
 use std::io::Write;
 use std::{process::Command, time::Instant};
 
-mod mcp_server;
-use mcp_server::{ComparisonMetrics, FibonacciMetrics};
-
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
 struct Args {
@@ -290,7 +287,6 @@ struct Stats {
     max: f64,
 }
 
-#[allow(dead_code)]
 fn calculate_stats(times: &[f64]) -> Stats {
     let len = times.len();
     Stats {
@@ -308,22 +304,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Create output file
     let mut output_file = std::fs::File::create("output.txt")?;
-
-    // Start metrics server if enabled
-    if args.metrics {
-        println!("Starting metrics server...");
-        if let Ok(server) = mcp_server::start_metrics_server() {
-            println!("Metrics server started successfully.");
-
-            // Run the server and handle its result
-            if let Err(e) = server.run().await {
-                eprintln!("Server error: {}", e);
-            }
-            return Ok(());
-        } else {
-            eprintln!("Failed to start metrics server");
-        }
-    }
 
     // Write UTF-8 BOM at the start if the file is empty
     let metadata = output_file.metadata().expect("Failed to get file metadata");
@@ -411,71 +391,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 rust_to_ruby_result = Some((result, times));
             }
             Err(e) => output!("{}: {}", "Error running Rust→Ruby FFI".red().bold(), e),
-        }
-    }
-
-    // After benchmarks, send metrics to MCP server if enabled
-    if let (
-        Some((rust_val, rust_times)),
-        Some((ruby_val, ruby_times)),
-        Some((r2r_val, r2r_times)),
-        Some((rtr_val, rtr_times)),
-    ) = (
-        &rust_result,
-        &ruby_result,
-        &ruby_to_rust_result,
-        &rust_to_ruby_result,
-    ) {
-        let rust_stats = calculate_stats(rust_times);
-        let ruby_stats = calculate_stats(ruby_times);
-        let r2r_stats = calculate_stats(r2r_times);
-        let rtr_stats = calculate_stats(rtr_times);
-
-        let comparison = ComparisonMetrics {
-            rust_metrics: FibonacciMetrics {
-                number: args.number,
-                result: *rust_val,
-                execution_time_ms: rust_stats.mean,
-                implementation: "Pure Rust".to_string(),
-            },
-            ruby_metrics: FibonacciMetrics {
-                number: args.number,
-                result: *ruby_val,
-                execution_time_ms: ruby_stats.mean,
-                implementation: "Pure Ruby".to_string(),
-            },
-            rust_ruby_ffi_metrics: FibonacciMetrics {
-                number: args.number,
-                result: *r2r_val,
-                execution_time_ms: r2r_stats.mean,
-                implementation: "Ruby->Rust FFI".to_string(),
-            },
-            ruby_rust_ffi_metrics: FibonacciMetrics {
-                number: args.number,
-                result: *rtr_val,
-                execution_time_ms: rtr_stats.mean,
-                implementation: "Rust->Ruby FFI".to_string(),
-            },
-            speedup_vs_rust: ruby_stats.mean / rust_stats.mean,
-        };
-
-        // Print consolidated table
-        print_consolidated_table(
-            args.number,
-            Some(&(*rust_val, rust_times.clone())),
-            Some(&(*ruby_val, ruby_times.clone())),
-            Some(&(*r2r_val, r2r_times.clone())),
-            Some(&(*rtr_val, rtr_times.clone())),
-            &mut output_file,
-        );
-
-        // Report metrics to MCP server if enabled
-        if args.metrics {
-            if let Ok(server) = mcp_server::start_metrics_server() {
-                if let Err(e) = server.report_comparison(&comparison) {
-                    eprintln!("Failed to report comparison metrics: {}", e);
-                }
-            }
         }
     }
 
