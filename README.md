@@ -42,25 +42,25 @@ Options:
 
 ### Example Commands
 
-1. Run both implementations (default):
+#### 1. Run both implementations (default)
 
 ```bash
 cargo run -- -N 40
 ```
 
-2. Run just the Rust implementation:
+#### 2. Run just the Rust implementation
 
 ```bash
 cargo run -- --rust -N 40
 ```
 
-3. Run just the Ruby implementation:
+#### 3. Run just the Ruby implementation
 
 ```bash
 cargo run -- --ruby -N 40
 ```
 
-4. Run with MCP server enabled:
+#### 4. Run with MCP server enabled
 
 ```bash
 cargo run -- -N 40 --metrics
@@ -102,7 +102,7 @@ echo '{"type":"Benchmark","data":{"number":40,"implementation":"rust"}}' | cargo
 
 The server accepts two types of requests:
 
-1. Calculate Request (single calculation):
+#### 1. Calculate Request (single calculation)
 
 ```json
 {
@@ -114,7 +114,7 @@ The server accepts two types of requests:
 }
 ```
 
-2. Benchmark Request (runs 100 iterations):
+#### 2. Benchmark Request (runs 100 iterations)
 
 ```json
 {
@@ -130,7 +130,7 @@ The server accepts two types of requests:
 
 The server responds with JSON in one of two formats:
 
-1. Successful Result:
+#### 1. Successful Result
 
 ```json
 {
@@ -143,7 +143,7 @@ The server responds with JSON in one of two formats:
 }
 ```
 
-2. Error:
+#### 2. Error
 
 ```json
 {
@@ -211,7 +211,7 @@ When running benchmarks, the server also outputs comprehensive comparison metric
 
 ## Project Structure
 
-```
+```txt
 .
 ├── src/
 │   ├── main.rs         # Main Rust implementation and benchmarking
