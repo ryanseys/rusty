@@ -21,7 +21,7 @@ fn false_binary_returns_failure() {
 }
 
 #[test]
-fn hello_world_works() {
-    let mut cmd = Command::cargo_bin("hello_world").unwrap();
+fn hello_works() {
+    let mut cmd = Command::cargo_bin("hello").unwrap();
     cmd.assert().success().stdout("Hello, world!\n");
 }
