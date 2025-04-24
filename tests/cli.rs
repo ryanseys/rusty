@@ -23,3 +23,9 @@ fn false_binary_returns_failure() {
     let mut cmd = assert_cmd::Command::cargo_bin("false").unwrap();
     cmd.assert().failure();
 }
+
+#[test]
+fn hello_world_works() {
+    let mut cmd = assert_cmd::Command::cargo_bin("hello_world").unwrap();
+    cmd.assert().success().stdout("Hello, world!\n");
+}
