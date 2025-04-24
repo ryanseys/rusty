@@ -2,16 +2,7 @@
 name = "rusty"
 version = "0.1.0"
 edition = "2021"
-
-# Library configuration for FFI
-[lib]
-name = "rusty"
-crate-type = ["cdylib", "rlib"]
-
-# Binary configuration
-[[bin]]
-name = "rusty"
-path = "src/main.rs"
+default-run = "rusty"
 
 [dependencies]
 libc = "0.2"
