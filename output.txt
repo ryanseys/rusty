@@ -1,5 +1,5 @@
 ﻿
-=== Run at 2025-04-24 14:38:06.477392 -07:00 ===
+=== Run at 2025-04-24 15:24:52.739187 -07:00 ===
 Running both Rust and Ruby implementations for N = 88
 
 
@@ -12,4 +12,4 @@ The 88th Fibonacci number is: 1100087778366101931
 
 [1;36m🔗 Rust→Ruby FFI Implementation:[0m
 
-[3;36mRust was 30912.08x faster than Ruby! 🚀[0m
+[3;36mRust was 82984.08x faster than Ruby! 🚀[0m

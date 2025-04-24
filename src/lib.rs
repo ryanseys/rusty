@@ -19,31 +19,29 @@ type RubyFibonacciFn = unsafe extern "C" fn(c_int) -> c_longlong;
 /// * `name` is not null (this function will assert on null)
 ///
 /// Returns a pointer to a newly allocated C string that must be freed using `free_string`.
-#[no_mangle]
-pub unsafe extern "C" fn calculate_fibonacci_and_greet(
-    name: *const c_char,
-    n: c_int,
-) -> *mut c_char {
-    // Convert C string to Rust string
-    assert!(!name.is_null());
-    let name = CStr::from_ptr(name);
-    let name_str = name.to_str().unwrap_or("friend");
+pub extern "C" fn calculate_fibonacci_and_greet(name: *const c_char, n: c_int) -> *mut c_char {
+    unsafe {
+        // Convert C string to Rust string
+        assert!(!name.is_null());
+        let name = CStr::from_ptr(name);
+        let name_str = name.to_str().unwrap_or("friend");
 
-    // Calculate fibonacci with timing
-    let start = Instant::now();
-    let result = fibonacci(n);
-    let duration = start.elapsed();
-    let time_ms = duration.as_secs_f64() * 1000.0;
+        // Calculate fibonacci with timing
+        let start = Instant::now();
+        let result = fibonacci(n);
+        let duration = start.elapsed();
+        let time_ms = duration.as_secs_f64() * 1000.0;
 
-    // Create the greeting with the fibonacci result and timing
-    let result = format!(
-        "Hello {}! The {}th Fibonacci number is: {}\nRust Internal Time: {:.6} milliseconds\n",
-        name_str, n, result, time_ms
-    );
+        // Create the greeting with the fibonacci result and timing
+        let result = format!(
+            "Hello {}! The {}th Fibonacci number is: {}\nRust Internal Time: {:.6} milliseconds\n",
+            name_str, n, result, time_ms
+        );
 
-    // Convert the result back to a C string
-    let c_result = CString::new(result).unwrap();
-    c_result.into_raw() // Transfer ownership to Ruby
+        // Convert the result back to a C string
+        let c_result = CString::new(result).unwrap();
+        c_result.into_raw() // Transfer ownership to Ruby
+    }
 }
 
 /// Calculates Fibonacci numbers for a batch of inputs.
@@ -58,31 +56,29 @@ pub unsafe extern "C" fn calculate_fibonacci_and_greet(
 /// * The memory referenced by `numbers` is not mutated during this function's execution
 ///
 /// Returns a pointer to a newly allocated C string that must be freed using `free_string`.
-#[no_mangle]
-pub unsafe extern "C" fn calculate_fibonacci_batch(
-    numbers: *const c_int,
-    len: c_int,
-) -> *mut c_char {
-    let numbers = std::slice::from_raw_parts(numbers, len as usize);
+pub extern "C" fn calculate_fibonacci_batch(numbers: *const c_int, len: c_int) -> *mut c_char {
+    unsafe {
+        let numbers = std::slice::from_raw_parts(numbers, len as usize);
 
-    let start = Instant::now();
-    let mut results = Vec::with_capacity(len as usize);
+        let start = Instant::now();
+        let mut results = Vec::with_capacity(len as usize);
 
-    for &n in numbers {
-        results.push(fibonacci(n));
+        for &n in numbers {
+            results.push(fibonacci(n));
+        }
+
+        let duration = start.elapsed();
+        let time_ms = duration.as_secs_f64() * 1000.0;
+
+        // Format results as JSON-like string
+        let result = format!(
+            "{{\"results\": [{:?}], \"time_ms\": {:.6}}}",
+            results, time_ms
+        );
+
+        let c_result = CString::new(result).unwrap();
+        c_result.into_raw()
     }
-
-    let duration = start.elapsed();
-    let time_ms = duration.as_secs_f64() * 1000.0;
-
-    // Format results as JSON-like string
-    let result = format!(
-        "{{\"results\": [{:?}], \"time_ms\": {:.6}}}",
-        results, time_ms
-    );
-
-    let c_result = CString::new(result).unwrap();
-    c_result.into_raw()
 }
 
 /// Frees a C string previously allocated by Rust.
@@ -94,10 +90,11 @@ pub unsafe extern "C" fn calculate_fibonacci_batch(
 /// * `ptr` has not been freed before
 /// * `ptr` will not be used after this call
 /// * If `ptr` is null, this function is a no-op
-#[no_mangle]
-pub unsafe extern "C" fn free_string(ptr: *mut c_char) {
-    if !ptr.is_null() {
-        let _ = CString::from_raw(ptr);
+pub extern "C" fn free_string(ptr: *mut c_char) {
+    unsafe {
+        if !ptr.is_null() {
+            let _ = CString::from_raw(ptr);
+        }
     }
 }
 
@@ -132,7 +129,6 @@ fn fibonacci(n: i32) -> u128 {
     b
 }
 
-#[no_mangle]
 pub extern "C" fn fibonacci_ffi(n: c_uint) -> u64 {
     if n <= 1 {
         return n as u64;
@@ -155,10 +151,11 @@ pub extern "C" fn fibonacci_ffi(n: c_uint) -> u64 {
 /// * `ruby_fn_ptr` is a valid function pointer to a Ruby function matching the `RubyFibonacciFn` type
 /// * The Ruby function is still valid and callable
 /// * The Ruby runtime is initialized and ready to execute the function
-#[no_mangle]
-pub unsafe extern "C" fn call_ruby_fibonacci(ruby_fn_ptr: usize, n: c_int) -> c_longlong {
-    let ruby_fn: RubyFibonacciFn = unsafe { mem::transmute(ruby_fn_ptr) };
-    unsafe { ruby_fn(n) }
+pub extern "C" fn call_ruby_fibonacci(ruby_fn_ptr: usize, n: c_int) -> c_longlong {
+    unsafe {
+        let ruby_fn: RubyFibonacciFn = mem::transmute(ruby_fn_ptr);
+        ruby_fn(n)
+    }
 }
 
 // Function to benchmark Ruby calls
